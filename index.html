@@ -121,6 +121,31 @@
   .tab-btn[aria-selected="true"] .tab-badge{ background:rgba(0,0,0,.22); }
 
   .file-actions{ display:flex; gap:7px; margin-inline-start:auto; align-items:center; }
+  .fa-sep{ width:1px; align-self:stretch; margin:6px 2px; background:var(--toolbar-line); }
+
+  .drive-modal-backdrop{
+    position:fixed; inset:0; background:rgba(10,10,14,.55); z-index:300;
+    display:none; align-items:center; justify-content:center; padding:20px;
+  }
+  .drive-modal-backdrop.show{ display:flex; }
+  .drive-modal{
+    background:#fff; border-radius:var(--r-md); box-shadow:var(--shadow-lg);
+    max-width:440px; width:100%; padding:18px; max-height:80vh; overflow:auto;
+  }
+  .drive-modal h3{ font-family:'Rubik',sans-serif; font-size:1.05rem; margin:0 0 12px; color:var(--ink); }
+  .drive-modal-item{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    width:100%; text-align:start; background:var(--chip-tint); border:1px solid var(--card-line);
+    border-radius:8px; padding:10px 12px; margin-bottom:8px; cursor:pointer; font-family:'Assistant',sans-serif;
+    transition:background .15s, border-color .15s;
+  }
+  .drive-modal-item:hover{ background:var(--brand-tint); border-color:var(--brand); }
+  .drive-modal-item .dmi-when{ font-size:.78rem; color:var(--ink-soft); white-space:nowrap; }
+  .drive-modal-cancel{
+    width:100%; margin-top:6px; background:none; border:none; color:var(--ink-soft);
+    font-weight:700; font-size:.85rem; cursor:pointer; padding:8px;
+  }
+  .drive-modal-cancel:hover{ color:var(--red); }
   .save-dot{
     width:9px; height:9px; border-radius:50%; background:#f0a020; flex:0 0 auto;
     margin-inline-end:2px; display:none;
@@ -558,6 +583,7 @@
   [hidden]{ display:none !important; }
   input[type="file"].visually-hidden{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
 </style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
@@ -586,6 +612,23 @@
       <span class="tip">טען מקובץ</span>
     </button>
     <input type="file" id="file-input" class="visually-hidden" accept=".drkc,text/plain">
+    <span class="fa-sep" aria-hidden="true"></span>
+    <button class="sq-btn" id="btn-drive-save" type="button" aria-label="שמור לגוגל דרייב">
+      <svg viewBox="0 0 24 24"><path d="M7 17a4 4 0 0 1-1-7.9 5 5 0 0 1 9.6-2A4.5 4.5 0 0 1 17 17H7z"/><path d="M12 12v6M9.5 15.5 12 13l2.5 2.5"/></svg>
+      <span class="tip">שמור לגוגל דרייב</span>
+    </button>
+    <button class="sq-btn" id="btn-drive-load" type="button" aria-label="טען מגוגל דרייב">
+      <svg viewBox="0 0 24 24"><path d="M7 17a4 4 0 0 1-1-7.9 5 5 0 0 1 9.6-2A4.5 4.5 0 0 1 17 17H7z"/><path d="M12 12.5v6M9.5 16 12 18.5 14.5 16"/></svg>
+      <span class="tip">טען מגוגל דרייב</span>
+    </button>
+  </div>
+</div>
+
+<div class="drive-modal-backdrop" id="drive-modal-backdrop">
+  <div class="drive-modal">
+    <h3>איזה קובץ לטעון מגוגל דרייב?</h3>
+    <div id="drive-modal-list"></div>
+    <button class="drive-modal-cancel" id="drive-modal-cancel" type="button">ביטול</button>
   </div>
 </div>
 
@@ -1403,6 +1446,175 @@
     r.onload=()=>applyLoaded(parseFileText(String(r.result)),'מהקובץ');
     r.onerror=()=>toast('שגיאה בקריאת הקובץ.',true);
     r.readAsText(f,'utf-8');
+  });
+
+  /* ============ GOOGLE DRIVE SAVE / LOAD ============ */
+  const DRIVE_CLIENT_ID = '144001235867-kqnmb9q2d20uh3odj27ac4c5kbjua50h.apps.googleusercontent.com';
+  const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+  const DRIVE_FILE_ID_KEY = 'dragoncon2026.drive.fileId';
+
+  let driveTokenClient = null;
+  let driveAccessToken = null;
+  let driveTokenExpiry = 0;
+
+  function driveLibReady(){
+    return typeof google !== 'undefined' && google.accounts && google.accounts.oauth2;
+  }
+
+  function getDriveToken(){
+    return new Promise((resolve, reject) => {
+      if (!driveLibReady()){
+        reject(new Error('gis-not-loaded'));
+        return;
+      }
+      if (driveAccessToken && Date.now() < driveTokenExpiry - 60000){
+        resolve(driveAccessToken);
+        return;
+      }
+      if (!driveTokenClient){
+        driveTokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: DRIVE_CLIENT_ID,
+          scope: DRIVE_SCOPE,
+          callback: () => {}
+        });
+      }
+      driveTokenClient.callback = (resp) => {
+        if (resp.error){ reject(resp); return; }
+        driveAccessToken = resp.access_token;
+        driveTokenExpiry = Date.now() + (Number(resp.expires_in || 3600) * 1000);
+        resolve(driveAccessToken);
+      };
+      driveTokenClient.requestAccessToken();
+    });
+  }
+
+  async function driveFetch(url, options){
+    const token = await getDriveToken();
+    const res = await fetch(url, {
+      ...options,
+      headers: { ...(options && options.headers || {}), Authorization: 'Bearer ' + token }
+    });
+    if (!res.ok){
+      const body = await res.text().catch(()=> '');
+      const err = new Error('drive-http-' + res.status);
+      err.status = res.status; err.body = body;
+      throw err;
+    }
+    return res;
+  }
+
+  async function driveListFiles(){
+    const q = encodeURIComponent(`name = '${SUGGESTED_NAME}' and trashed = false`);
+    const res = await driveFetch(
+      `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc&spaces=drive`
+    );
+    const json = await res.json();
+    return json.files || [];
+  }
+
+  async function driveCreateFile(text){
+    const boundary = 'dcbnd_' + Date.now();
+    const metadata = { name: SUGGESTED_NAME, mimeType: 'text/plain' };
+    const body =
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+      `--${boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n${text}\r\n` +
+      `--${boundary}--`;
+    const res = await driveFetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime',
+      { method:'POST', headers:{'Content-Type': `multipart/related; boundary=${boundary}`}, body }
+    );
+    return res.json();
+  }
+
+  async function driveUpdateFile(fileId, text){
+    const res = await driveFetch(
+      `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&fields=id,name,modifiedTime`,
+      { method:'PATCH', headers:{'Content-Type':'text/plain; charset=UTF-8'}, body:text }
+    );
+    return res.json();
+  }
+
+  async function driveGetContent(fileId){
+    const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+    return res.text();
+  }
+
+  function driveErrorToast(err){
+    console.error(err);
+    if (err && err.message === 'gis-not-loaded'){
+      toast('שירות ההתחברות של גוגל עדיין נטען, או שאין חיבור לאינטרנט. נסו שוב בעוד רגע.', true);
+    } else if (err && (err.error === 'popup_closed_by_user' || err.type === 'popup_closed')){
+      toast('חלון ההתחברות נסגר לפני שהאישור הושלם.', true);
+    } else if (err && err.status === 403){
+      toast('גוגל דרייב סירב את הגישה. ודאו שהחשבון שלכם רשום כ"משתמש בדיקה" בפרויקט.', true);
+    } else {
+      toast('שגיאה בתקשורת עם גוגל דרייב. נסו שוב.', true);
+    }
+  }
+
+  document.getElementById('btn-drive-save').addEventListener('click', async () => {
+    const text = buildFileText();
+    try{
+      toast('שומר לגוגל דרייב…');
+      let fileId = localStorage.getItem(DRIVE_FILE_ID_KEY);
+      let ok = false;
+      if (fileId){
+        try{ await driveUpdateFile(fileId, text); ok = true; }
+        catch(e){ fileId = null; }
+      }
+      if (!ok){
+        const matches = await driveListFiles();
+        if (matches.length){
+          fileId = matches[0].id;
+          await driveUpdateFile(fileId, text);
+        } else {
+          const created = await driveCreateFile(text);
+          fileId = created.id;
+        }
+      }
+      localStorage.setItem(DRIVE_FILE_ID_KEY, fileId);
+      setDirty(false);
+      toast('נשמר בגוגל דרייב בהצלחה.');
+    }catch(err){ driveErrorToast(err); }
+  });
+
+  function showDriveChooser(files){
+    return new Promise(resolve => {
+      const backdrop = document.getElementById('drive-modal-backdrop');
+      const list = document.getElementById('drive-modal-list');
+      list.innerHTML = '';
+      files.forEach(f => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'drive-modal-item';
+        const when = f.modifiedTime ? new Date(f.modifiedTime).toLocaleString('he-IL') : '';
+        btn.innerHTML = `<span>${f.name}</span><span class="dmi-when">${when}</span>`;
+        btn.addEventListener('click', () => { close(); resolve(f); });
+        list.appendChild(btn);
+      });
+      function close(){ backdrop.classList.remove('show'); cancelBtn.removeEventListener('click', onCancel); }
+      function onCancel(){ close(); resolve(null); }
+      const cancelBtn = document.getElementById('drive-modal-cancel');
+      cancelBtn.addEventListener('click', onCancel);
+      backdrop.classList.add('show');
+    });
+  }
+
+  document.getElementById('btn-drive-load').addEventListener('click', async () => {
+    try{
+      toast('מתחבר לגוגל דרייב…');
+      const matches = await driveListFiles();
+      if (!matches.length){
+        toast('לא נמצא קובץ בחירה שמור בגוגל דרייב עבור האפליקציה הזו.', true);
+        return;
+      }
+      let chosen = matches[0];
+      if (matches.length > 1) chosen = await showDriveChooser(matches);
+      if (!chosen) return;
+      const text = await driveGetContent(chosen.id);
+      localStorage.setItem(DRIVE_FILE_ID_KEY, chosen.id);
+      applyLoaded(parseFileText(text), 'מגוגל דרייב');
+    }catch(err){ driveErrorToast(err); }
   });
 
   /* ============ RESTORE BANNER ============ */
