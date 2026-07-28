@@ -517,6 +517,7 @@
   .mini-card .mc-cat{ display:inline-block; font-size:.64rem; font-weight:700; color:#fff; background:var(--cat-color); padding:3px 10px; border-radius:999px; }
   .mini-card .mc-subcat{ display:inline-block; font-size:.64rem; font-weight:700; color:var(--cat-color); background:#e4eaf5; border:1px solid #b9c8e2; padding:2px 9px; border-radius:999px; margin-inline-start:4px; }
   .mc-flags{ display:flex; gap:5px; flex-wrap:wrap; margin-top:6px; align-items:center; }
+  .mc-controls{ display:flex; flex-direction:column; gap:6px; margin-top:8px; padding-top:7px; border-top:1px dashed var(--card-line); }
   .mc-prio{ font-size:.62rem; font-weight:700; padding:2px 8px; border-radius:999px; color:#fff; }
   .mc-prio.must{ background:var(--red); }
   .mc-prio.maybe{ background:var(--age-color); text-shadow:0 1px 2px rgba(90,60,0,.5); }
@@ -1182,8 +1183,6 @@
     }).join('');
 
     const flags=[];
-    if (m.prio) flags.push(`<span class="mc-prio ${m.prio}">${PRIO_LABEL[m.prio]}</span>`);
-    if (m.reg)  flags.push(`<span class="mc-reg">${ICON_TICK}נרשמתי</span>`);
     if (isC)    flags.push(`<span class="mc-conflict">${ICON_WARN}חפיפה${[...cSet].map(pid=>{const p=partById(pid);return p?badgeHTML(p,'sm'):'';}).join('')}</span>`);
     if (issues.length) flags.push(`<span class="mc-agewarn">${ICON_WARN}גיל${issues.map(p=>badgeHTML(p,'sm')).join('')}</span>`);
 
@@ -1193,6 +1192,14 @@
       <span class="mc-cat">${esc(ev.category)}</span>${ev.subcat?`<span class="mc-subcat">${esc(ev.subcat)}</span>`:''}
       ${flags.length?`<div class="mc-flags">${flags.join('')}</div>`:''}
       <span class="mc-sub">מנחה: ${esc(ev.host)}</span>
+      <div class="mc-controls">
+        <div class="prio-group" role="group" aria-label="עדיפות">
+          <button class="prio-btn mc-prio-btn" data-ev="${ev.id}" data-prio="must"   aria-pressed="${m.prio==='must'}"   type="button" title="חובה">חובה</button>
+          <button class="prio-btn mc-prio-btn" data-ev="${ev.id}" data-prio="maybe"  aria-pressed="${m.prio==='maybe'}"  type="button" title="אולי">אולי</button>
+          <button class="prio-btn mc-prio-btn" data-ev="${ev.id}" data-prio="backup" aria-pressed="${m.prio==='backup'}" type="button" title="גיבוי">גיבוי</button>
+        </div>
+        <button class="reg-btn mc-reg-btn" data-ev="${ev.id}" aria-pressed="${m.reg}" type="button">${ICON_TICK}נרשמתי</button>
+      </div>
       ${parts.length?`<div class="passign">${chips}</div>`:''}
     </div>`;
   }
@@ -1266,8 +1273,22 @@
     if (goto) goto.addEventListener('click',()=>switchTab('parts'));
   }
 
-  /* toggle participant assignment from tab 2 */
+  /* priority / registered / participant-assignment, all editable from tab 2 */
   panelView.addEventListener('click', e=>{
+    const prioBtn=e.target.closest('.mc-prio-btn');
+    if (prioBtn){
+      const m=markOf(prioBtn.dataset.ev); if(!m) return;
+      m.prio = (m.prio===prioBtn.dataset.prio) ? null : prioBtn.dataset.prio;
+      afterStateChange();
+      return;
+    }
+    const regBtn=e.target.closest('.mc-reg-btn');
+    if (regBtn){
+      const m=markOf(regBtn.dataset.ev); if(!m) return;
+      m.reg = !m.reg;
+      afterStateChange();
+      return;
+    }
     const chip=e.target.closest('.pchip'); if(!chip) return;
     const evId=chip.dataset.ev, pid=Number(chip.dataset.pid);
     const m=markOf(evId); if(!m) return;
