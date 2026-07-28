@@ -707,6 +707,12 @@
         <button class="pill-toggle" aria-pressed="false" data-date="23 אוגוסט" type="button">23 באוג׳</button>
         <button class="pill-toggle" aria-pressed="false" data-date="24 אוגוסט" type="button">24 באוג׳</button>
       </div>
+      <div class="pill-group" id="time-pills">
+        <button class="pill-toggle" aria-pressed="true" data-time="all" type="button">כל השעות</button>
+        <button class="pill-toggle" aria-pressed="false" data-time="morning" type="button" title="שעת התחלה עד 12:00 (לא כולל)">בוקר</button>
+        <button class="pill-toggle" aria-pressed="false" data-time="afternoon" type="button" title="שעת התחלה מ-12:00 (כולל) עד 18:00 (לא כולל)">צהריים</button>
+        <button class="pill-toggle" aria-pressed="false" data-time="evening" type="button" title="שעת התחלה מ-18:00 (כולל) והלאה">ערב</button>
+      </div>
       <select class="mini-select" id="cat-select" aria-label="סינון לפי קטגוריה"><option value="all">כל הקטגוריות</option></select>
       <select class="mini-select" id="age-select" aria-label="סינון לפי גילאים"><option value="all">כל הגילאים</option></select>
       <div class="pill-group">
@@ -927,6 +933,7 @@
     card.dataset.cat=ev.category;
     card.dataset.age=ev.age;
     card.dataset.date=ev.date;
+    card.dataset.start=ev.start;
 
     const dTags=buildDetailTags(ev);
 
@@ -1087,15 +1094,26 @@
   const searchInput=document.getElementById('search-input');
   const searchWrap=document.getElementById('search-wrap');
   const datePills=document.querySelectorAll('#date-pills .pill-toggle');
+  const timePills=document.querySelectorAll('#time-pills .pill-toggle');
   const onlySelBtn=document.getElementById('only-selected');
   const noConfBtn=document.getElementById('no-conflicts');
   const resultCount=document.getElementById('result-count');
   const resetBtn=document.getElementById('reset-filters');
-  let activeDate='all', onlySelected=false, noConflicts=false;
+  let activeDate='all', activeTime='all', onlySelected=false, noConflicts=false;
+
+  function timeBucket(start){
+    if (start < '12:00') return 'morning';
+    if (start < '18:00') return 'afternoon';
+    return 'evening';
+  }
 
   datePills.forEach(b=>b.addEventListener('click',()=>{
     datePills.forEach(x=>x.setAttribute('aria-pressed','false'));
     b.setAttribute('aria-pressed','true'); activeDate=b.dataset.date; applyFilters();
+  }));
+  timePills.forEach(b=>b.addEventListener('click',()=>{
+    timePills.forEach(x=>x.setAttribute('aria-pressed','false'));
+    b.setAttribute('aria-pressed','true'); activeTime=b.dataset.time; applyFilters();
   }));
   onlySelBtn.addEventListener('click',()=>{ onlySelected=!onlySelected; onlySelBtn.setAttribute('aria-pressed',String(onlySelected)); applyFilters(); });
   noConfBtn.addEventListener('click',()=>{ noConflicts=!noConflicts; noConfBtn.setAttribute('aria-pressed',String(noConflicts)); applyFilters(); });
@@ -1104,8 +1122,9 @@
   searchInput.addEventListener('input',applyFilters);
   document.getElementById('clear-search').addEventListener('click',()=>{ searchInput.value=''; searchInput.focus(); applyFilters(); });
   resetBtn.addEventListener('click',()=>{
-    searchInput.value=''; activeDate='all';
+    searchInput.value=''; activeDate='all'; activeTime='all';
     datePills.forEach(b=>b.setAttribute('aria-pressed', b.dataset.date==='all'?'true':'false'));
+    timePills.forEach(b=>b.setAttribute('aria-pressed', b.dataset.time==='all'?'true':'false'));
     catSelect.value='all'; ageSelect.value='all';
     onlySelected=false; onlySelBtn.setAttribute('aria-pressed','false');
     noConflicts=false; noConfBtn.setAttribute('aria-pressed','false');
@@ -1116,6 +1135,7 @@
     return {
       search: searchInput.value,
       date: activeDate,
+      time: activeTime,
       cat: catSelect.value,
       age: ageSelect.value,
       onlySelected: onlySelected,
@@ -1128,6 +1148,8 @@
     searchInput.value = f.search || '';
     activeDate = (f.date==='23 אוגוסט' || f.date==='24 אוגוסט') ? f.date : 'all';
     datePills.forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.date===activeDate)));
+    activeTime = ['morning','afternoon','evening'].includes(f.time) ? f.time : 'all';
+    timePills.forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.time===activeTime)));
     const catOk = [...catSelect.options].some(o=>o.value===f.cat);
     catSelect.value = catOk ? f.cat : 'all';
     const ageOk = [...ageSelect.options].some(o=>o.value===f.age);
@@ -1148,6 +1170,7 @@
       let show=true;
       if (isFiltered(id)) show=false;
       if (activeDate!=='all' && card.dataset.date!==activeDate) show=false;
+      if (activeTime!=='all' && timeBucket(card.dataset.start)!==activeTime) show=false;
       if (cat!=='all' && card.dataset.cat!==cat) show=false;
       if (age!=='all' && card.dataset.age!==age) show=false;
       if (q && !(card.dataset.name.includes(q)||card.dataset.host.includes(q))) show=false;
@@ -1162,7 +1185,7 @@
       h.hidden=!any; if(l) l.hidden=!any;
     });
     document.getElementById('no-results-note').hidden = visible!==0;
-    const active = q||activeDate!=='all'||cat!=='all'||age!=='all'||onlySelected||noConflicts;
+    const active = q||activeDate!=='all'||activeTime!=='all'||cat!=='all'||age!=='all'||onlySelected||noConflicts;
     resetBtn.hidden=!active;
     const fN=filteredCount(), totalCount=EVENTS.length-fN;
     const filteredNote = fN ? ` <span class="filtered-note">(${fN} מסוננים, לא מוצגים כאן)</span>` : '';
@@ -1687,6 +1710,7 @@
     const fst=getFilterState();
     L.push(`%search=${fst.search}`);
     L.push(`%date=${fst.date}`);
+    L.push(`%time=${fst.time}`);
     L.push(`%cat=${fst.cat}`);
     L.push(`%age=${fst.age}`);
     L.push(`%onlySelected=${fst.onlySelected?'1':'0'}`);
@@ -1750,6 +1774,7 @@
     const filters = {
       search: filterRaw.search || '',
       date: filterRaw.date || 'all',
+      time: filterRaw.time || 'all',
       cat: filterRaw.cat || 'all',
       age: filterRaw.age || 'all',
       onlySelected: filterRaw.onlySelected==='1',
