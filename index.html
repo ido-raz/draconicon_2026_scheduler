@@ -312,8 +312,8 @@
 
   .prio-group{ display:flex; gap:3px; justify-content:center; }
   .prio-btn{
-    flex:1; font-family:'Assistant',sans-serif; font-size:.66rem; font-weight:700;
-    padding:4px 0; border-radius:6px; cursor:pointer;
+    flex:1; font-family:'Assistant',sans-serif; font-size:.58rem; font-weight:700;
+    padding:3px 0; border-radius:5px; cursor:pointer;
     border:1px solid var(--card-line-strong); background:#fff; color:var(--ink-soft);
     transition:background .15s ease, color .15s ease, border-color .15s ease;
   }
@@ -323,15 +323,25 @@
   .prio-btn[aria-pressed="true"][data-prio="backup"]{ background:var(--ink-soft); border-color:var(--ink-soft); color:#fff; }
 
   .reg-btn{
-    display:flex; align-items:center; justify-content:center; gap:5px; width:100%;
-    font-family:'Assistant',sans-serif; font-size:.66rem; font-weight:700;
-    padding:5px 6px; border-radius:6px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:4px; width:100%;
+    font-family:'Assistant',sans-serif; font-size:.58rem; font-weight:700;
+    padding:4px 5px; border-radius:5px; cursor:pointer;
     border:1px solid var(--card-line-strong); background:#fff; color:var(--ink-soft);
     transition:background .15s ease, color .15s ease, border-color .15s ease;
   }
-  .reg-btn svg{ width:11px; height:11px; stroke:currentColor; fill:none; stroke-width:3; }
+  .reg-btn svg{ width:9px; height:9px; stroke:currentColor; fill:none; stroke-width:3; }
   .reg-btn:hover{ background:var(--chip-tint); }
   .reg-btn[aria-pressed="true"]{ background:var(--green); border-color:var(--green); color:#fff; }
+
+  .mc-toprow{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .mc-deselect-btn{
+    display:flex; align-items:center; gap:3px; flex:0 0 auto; white-space:nowrap;
+    background:none; border:1px solid var(--card-line-strong); border-radius:999px;
+    padding:2px 8px; font-size:.6rem; font-weight:700; color:var(--ink-soft); cursor:pointer;
+    transition:background .15s, color .15s, border-color .15s;
+  }
+  .mc-deselect-btn:hover{ background:var(--red-tint); color:var(--red); border-color:var(--red); }
+  .mc-deselect-btn svg{ width:9px; height:9px; stroke-width:3; }
 
   .seal-wrap{ flex:0 0 auto; padding:2px; cursor:pointer; }
   .seal{
@@ -508,6 +518,11 @@
     transition:box-shadow .18s ease;
   }
   .mini-card:hover{ box-shadow:var(--shadow-sm); }
+
+  /* per-participant tab: several events in the same day/slot sit side by side, ranked by priority
+     (first in DOM = rightmost in RTL = highest priority) */
+  .participant-row{ display:flex; flex-direction:row; gap:10px; overflow-x:auto; padding-bottom:2px; }
+  .participant-row .mini-card{ flex:0 0 auto; width:230px; margin-bottom:0; }
   .mini-card:last-child{ margin-bottom:0; }
   .mini-card.is-conflict{ border-inline-start-color:var(--red); background:#fffafa; }
   .mini-card .mc-time{ display:inline-flex; align-items:center; gap:5px; font-weight:600; font-family:'Rubik',sans-serif; font-size:.86rem; color:var(--ink); }
@@ -591,6 +606,8 @@
     .day-block{ break-inside:avoid; page-break-inside:avoid; }
     .mini-card{ box-shadow:none; }
     .pchip[data-on="0"]{ display:none !important; }
+    .mc-deselect-btn{ display:none !important; }
+    .participant-row{ overflow-x:visible; flex-wrap:wrap; }
   }
 
   [hidden]{ display:none !important; }
@@ -614,6 +631,7 @@
     <button class="tab-btn" id="tab-view" role="tab" aria-selected="false" type="button">תצוגת נבחרים<span class="tab-badge" id="sel-count">0</span></button>
     <button class="tab-btn" id="tab-parts" role="tab" aria-selected="false" type="button">משתתפים<span class="tab-badge" id="part-count">0</span></button>
     <button class="tab-btn" id="tab-filtered" role="tab" aria-selected="false" type="button">אירועים מסוננים<span class="tab-badge" id="filtered-count">0</span></button>
+    <span id="tabs-dynamic" style="display:contents"></span>
   </div>
   <div class="file-actions">
     <span class="save-dot" id="save-dot" title="יש שינויים שלא נשמרו לקובץ"></span>
@@ -690,6 +708,7 @@
     <p class="part-intro">אירועים שסימנתם כאן חוזרים להופיע ברשימת "סימון אירועים" מיד לאחר ביטול הסינון.</p>
     <div id="filtered-list-container"></div>
   </section>
+  <section id="panel-participant" hidden></section>
 </main>
 
 <footer class="site-foot">
@@ -723,6 +742,7 @@
   const ICON_TICK='<svg viewBox="0 0 24 24"><path d="M4.5 12.5l5 5L20 6.5"/></svg>';
   const ICON_EYEOFF='<svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 10.6a3 3 0 0 0 4.24 4.24M9.9 4.24A9.7 9.7 0 0 1 12 4c5 0 9 4 10 8-.3 1.1-.8 2.2-1.5 3.2M6.6 6.6C4.6 8 3.2 10 2.5 12c1 4 5 8 10 8 1 0 2-.2 3-.5"/></svg>';
   const ICON_UNDO='<svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></svg>';
+  const ICON_X='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 
   const toMin = t => { const p = t.split(':'); return (+p[0])*60 + (+p[1]); };
   const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1054,9 +1074,11 @@
     syncAllCards();
     updateCounters();
     applyFilters();
+    renderParticipantTabs();
     if (!panelView.hidden) renderView();
     if (!panelParts.hidden && opts.rerenderParts) renderParts();
     if (!panelFiltered.hidden) renderFiltered();
+    if (!panelParticipant.hidden && currentParticipantTabId!=null) renderParticipantView(currentParticipantTabId);
     if (opts.markDirty!==false){ setDirty(true); autosave(); }
   }
 
@@ -1145,21 +1167,52 @@
   /* ============ TABS ============ */
   const tabMark=document.getElementById('tab-mark'), tabView=document.getElementById('tab-view'), tabParts=document.getElementById('tab-parts'), tabFiltered=document.getElementById('tab-filtered');
   const panelMark=document.getElementById('panel-mark'), panelView=document.getElementById('panel-view'), panelParts=document.getElementById('panel-parts'), panelFiltered=document.getElementById('panel-filtered');
+  const panelParticipant=document.getElementById('panel-participant');
+  const tabsDynamic=document.getElementById('tabs-dynamic');
+  let currentParticipantTabId=null;
+
   tabMark.addEventListener('click',()=>switchTab('mark'));
   tabView.addEventListener('click',()=>switchTab('view'));
   tabParts.addEventListener('click',()=>switchTab('parts'));
   tabFiltered.addEventListener('click',()=>switchTab('filtered'));
+  tabsDynamic.addEventListener('click', e=>{
+    const btn=e.target.closest('[data-participant-tab]'); if(!btn) return;
+    switchTab('participant:'+btn.dataset.participantTab);
+  });
+
   function switchTab(w){
+    const isP = typeof w==='string' && w.indexOf('participant:')===0;
+    currentParticipantTabId = isP ? Number(w.slice('participant:'.length)) : null;
+
     tabMark.setAttribute('aria-selected',String(w==='mark'));
     tabView.setAttribute('aria-selected',String(w==='view'));
     tabParts.setAttribute('aria-selected',String(w==='parts'));
     tabFiltered.setAttribute('aria-selected',String(w==='filtered'));
+    tabsDynamic.querySelectorAll('[data-participant-tab]').forEach(b=>{
+      b.setAttribute('aria-selected', String(isP && Number(b.dataset.participantTab)===currentParticipantTabId));
+    });
+
     panelMark.hidden=w!=='mark'; panelView.hidden=w!=='view'; panelParts.hidden=w!=='parts'; panelFiltered.hidden=w!=='filtered';
+    panelParticipant.hidden=!isP;
+
     if(w==='view') renderView();
     if(w==='parts') renderParts();
     if(w==='filtered') renderFiltered();
+    if(isP) renderParticipantView(currentParticipantTabId);
   }
   window.__switchTab = switchTab;
+
+  function renderParticipantTabs(){
+    tabsDynamic.innerHTML = activeParts().map(p=>{
+      const n = selectedIds().filter(id=>state.marks[id].parts.indexOf(p.id)!==-1).length;
+      const active = currentParticipantTabId===p.id;
+      return `<button class="tab-btn" data-participant-tab="${p.id}" role="tab" aria-selected="${active}" type="button">${esc(p.name)}<span class="tab-badge">${n}</span></button>`;
+    }).join('');
+    if (currentParticipantTabId!=null){
+      const p=partById(currentParticipantTabId);
+      if (!p || p.name.trim()==='') switchTab('view');
+    }
+  }
 
   /* ============ TAB 2 ============ */
   const ROW_DEFS=[
@@ -1187,7 +1240,10 @@
     if (issues.length) flags.push(`<span class="mc-agewarn">${ICON_WARN}גיל${issues.map(p=>badgeHTML(p,'sm')).join('')}</span>`);
 
     return `<div class="mini-card${isC?' is-conflict':''}">
-      <span class="mc-time">${ICON_CLOCK}${ev.start}–${ev.end}</span>
+      <div class="mc-toprow">
+        <span class="mc-time">${ICON_CLOCK}${ev.start}–${ev.end}</span>
+        <button class="mc-deselect-btn" type="button" data-ev="${ev.id}" title="בטל את הסימון של האירוע הזה">${ICON_X}<span>בטל בחירה</span></button>
+      </div>
       <span class="mc-name">${esc(ev.name)}</span>
       <span class="mc-cat">${esc(ev.category)}</span>${ev.subcat?`<span class="mc-subcat">${esc(ev.subcat)}</span>`:''}
       ${flags.length?`<div class="mc-flags">${flags.join('')}</div>`:''}
@@ -1273,8 +1329,16 @@
     if (goto) goto.addEventListener('click',()=>switchTab('parts'));
   }
 
-  /* priority / registered / participant-assignment, all editable from tab 2 */
-  panelView.addEventListener('click', e=>{
+  /* priority / registered / deselect / participant-assignment — shared by tab 2 and per-participant tabs */
+  function handleMiniCardClick(e){
+    const deselectBtn=e.target.closest('.mc-deselect-btn');
+    if (deselectBtn){
+      const id=deselectBtn.dataset.ev;
+      delete state.marks[id];
+      afterStateChange();
+      toast('הסימון בוטל. האירוע כבר לא מסומן כ"משתתף".');
+      return;
+    }
     const prioBtn=e.target.closest('.mc-prio-btn');
     if (prioBtn){
       const m=markOf(prioBtn.dataset.ev); if(!m) return;
@@ -1295,7 +1359,56 @@
     const i=m.parts.indexOf(pid);
     if (i===-1) m.parts.push(pid); else m.parts.splice(i,1);
     afterStateChange();
-  });
+  }
+  panelView.addEventListener('click', handleMiniCardClick);
+  panelParticipant.addEventListener('click', handleMiniCardClick);
+
+  /* ============ PER-PARTICIPANT TABS ============ */
+  function prioRank(prio){ return prio==='must'?0 : prio==='maybe'?1 : prio==='backup'?2 : 3; }
+
+  function buildParticipantDayTable(pid, dateKey, evs){
+    const dayEvs = evs.filter(e=>e.date===dateKey);
+    const rows = ROW_DEFS.map(rd=>{
+      const cellEvs = dayEvs.filter(e=>rd.test(e.start)).sort((a,b)=>
+        prioRank(markOf(a.id).prio)-prioRank(markOf(b.id).prio) || toMin(a.start)-toMin(b.start) || a.name.localeCompare(b.name,'he'));
+      const cell = cellEvs.length
+        ? `<td class="slot-cell has-items"><div class="participant-row">${cellEvs.map(miniCardHTML).join('')}</div></td>`
+        : `<td class="slot-cell"><div class="cell-empty">—</div></td>`;
+      return `<tr><th class="row-label">${rd.label}</th>${cell}</tr>`;
+    }).join('');
+    const p=partById(pid);
+    return `<div class="day-block">
+      <h2 class="day-title"><span class="dot"></span>${DATE_LABEL[dateKey]}<span class="mini-count">${dayEvs.length} אירועים</span><span class="rule"></span></h2>
+      <div class="grid-scroll"><table class="slot-grid">
+        <thead><tr><th></th><th>${badgeHTML(p,'sm')} ${esc(p.name)}</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    </div>`;
+  }
+
+  function renderParticipantView(pid){
+    const p=partById(pid);
+    if (!p || p.name.trim()===''){ switchTab('view'); return; }
+
+    const evs = selectedIds().filter(id=>state.marks[id].parts.indexOf(pid)!==-1)
+      .map(id=>EVENTS_BY_ID.get(id)).filter(Boolean);
+
+    const head = `<div class="view-head">
+      <div class="view-stats">
+        <span class="stat-chip">${badgeHTML(p)}<span class="num">${evs.length}</span> אירועים ל${esc(p.name)}</span>
+        <span class="stat-chip"><span class="num">${evs.filter(e=>e.date===DAYS[0]).length}</span> ב-23 באוג׳</span>
+        <span class="stat-chip"><span class="num">${evs.filter(e=>e.date===DAYS[1]).length}</span> ב-24 באוג׳</span>
+      </div>
+    </div>`;
+
+    if (!evs.length){
+      panelParticipant.innerHTML = head + `<div class="empty-note"><strong>אין עדיין אירועים ל${esc(p.name)}</strong>שבצו את ${esc(p.name)} לאירועים דרך הריבועים הצבעוניים בטאב "תצוגת נבחרים".</div>`;
+      return;
+    }
+    panelParticipant.innerHTML = head
+      + buildParticipantDayTable(pid, DAYS[0], evs)
+      + buildParticipantDayTable(pid, DAYS[1], evs);
+  }
 
   /* ============ TAB 3: participants ============ */
   function nextPartId(){
@@ -1838,6 +1951,7 @@
   syncAllCards();
   updateCounters();
   applyFilters();
+  renderParticipantTabs();
   setDirty(false);
 
 })();
