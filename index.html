@@ -246,6 +246,7 @@
 
   .filter-meta{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:0 4px; margin-bottom:14px; min-height:26px; }
   .result-count{ font-size:.82rem; color:var(--ink-soft); font-weight:600; }
+  .filtered-note{ font-weight:500; opacity:.85; }
   .result-count b{ color:var(--ink); }
   .link-btn{
     background:none; border:none; padding:0; cursor:pointer; font-family:'Assistant',sans-serif;
@@ -297,6 +298,17 @@
 
   .side-extra{ display:none; flex-direction:column; gap:6px; width:100%; margin-top:7px; padding-top:8px; border-top:1px dashed var(--side-line); }
   .event-card.is-checked .side-extra{ display:flex; }
+
+  .filter-btn{
+    display:flex; align-items:center; justify-content:center; gap:4px; margin-top:7px;
+    background:none; border:1px dashed var(--card-line-strong); border-radius:999px;
+    padding:4px 9px; font-size:.7rem; font-weight:600; color:var(--ink-soft); cursor:pointer;
+    transition:background .15s, color .15s, border-color .15s;
+  }
+  .filter-btn:hover{ background:var(--red-tint); color:var(--red); border-color:var(--red); }
+  .filter-btn svg{ width:12px; height:12px; stroke:currentColor; fill:none; stroke-width:2; flex:0 0 auto; }
+  /* requirement: once an event is marked as attending, the filter-out option disappears */
+  .event-card.is-checked .filter-btn{ display:none; }
 
   .prio-group{ display:flex; gap:3px; justify-content:center; }
   .prio-btn{
@@ -572,7 +584,7 @@
   @media print{
     body{ background:#fff; }
     .toolbar, .filter-bar, .filter-meta, header.site-head .eyebrow, .restore-banner, .storage-note,
-    #panel-mark, #panel-parts, .btn-print, .toast-wrap, footer.site-foot{ display:none !important; }
+    #panel-mark, #panel-parts, #panel-filtered, .btn-print, .toast-wrap, footer.site-foot{ display:none !important; }
     .grid-scroll{ box-shadow:none; border-color:#999; overflow:visible; }
     table.slot-grid{ min-width:0; }
     .day-block{ break-inside:avoid; page-break-inside:avoid; }
@@ -600,6 +612,7 @@
     <button class="tab-btn" id="tab-mark" role="tab" aria-selected="true" type="button">סימון אירועים</button>
     <button class="tab-btn" id="tab-view" role="tab" aria-selected="false" type="button">תצוגת נבחרים<span class="tab-badge" id="sel-count">0</span></button>
     <button class="tab-btn" id="tab-parts" role="tab" aria-selected="false" type="button">משתתפים<span class="tab-badge" id="part-count">0</span></button>
+    <button class="tab-btn" id="tab-filtered" role="tab" aria-selected="false" type="button">אירועים מסוננים<span class="tab-badge" id="filtered-count">0</span></button>
   </div>
   <div class="file-actions">
     <span class="save-dot" id="save-dot" title="יש שינויים שלא נשמרו לקובץ"></span>
@@ -672,6 +685,10 @@
 
   <section id="panel-view" hidden></section>
   <section id="panel-parts" hidden></section>
+  <section id="panel-filtered" hidden>
+    <p class="part-intro">אירועים שסימנתם כאן חוזרים להופיע ברשימת "סימון אירועים" מיד לאחר ביטול הסינון.</p>
+    <div id="filtered-list-container"></div>
+  </section>
 </main>
 
 <footer class="site-foot">
@@ -703,6 +720,8 @@
   const ICON_WARN='<svg viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17.2v.1"/></svg>';
   const ICON_LINK='<svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4 10 14M9 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>';
   const ICON_TICK='<svg viewBox="0 0 24 24"><path d="M4.5 12.5l5 5L20 6.5"/></svg>';
+  const ICON_EYEOFF='<svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 10.6a3 3 0 0 0 4.24 4.24M9.9 4.24A9.7 9.7 0 0 1 12 4c5 0 9 4 10 8-.3 1.1-.8 2.2-1.5 3.2M6.6 6.6C4.6 8 3.2 10 2.5 12c1 4 5 8 10 8 1 0 2-.2 3-.5"/></svg>';
+  const ICON_UNDO='<svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/></svg>';
 
   const toMin = t => { const p = t.split(':'); return (+p[0])*60 + (+p[1]); };
   const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -731,10 +750,13 @@
   /* ============ STATE ============ */
   // participants: [{id, name, age, color}]
   // marks: { eventId: {prio:null|'must'|'maybe'|'backup', reg:bool, parts:[ids]} }  (presence == selected)
-  const state = { participants: [], marks: {} };
+  // filtered: { eventId: true }  (presence == hidden from "סימון אירועים", shown only in "אירועים מסוננים")
+  const state = { participants: [], marks: {}, filtered: {} };
   let dirty = false;
 
   function isSelected(id){ return Object.prototype.hasOwnProperty.call(state.marks, id); }
+  function isFiltered(id){ return Object.prototype.hasOwnProperty.call(state.filtered, id); }
+  function filteredCount(){ return Object.keys(state.filtered).length; }
   function markOf(id){ return state.marks[id]; }
   function selectedIds(){ return Object.keys(state.marks); }
   function selectedEvents(){ return selectedIds().map(id => EVENTS_BY_ID.get(id)).filter(Boolean); }
@@ -795,7 +817,8 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
           savedAt: new Date().toISOString(),
           participants: state.participants,
-          marks: state.marks
+          marks: state.marks,
+          filtered: state.filtered
         }));
       }catch(e){
         storageOK=false;
@@ -809,10 +832,11 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return null;
       const d = JSON.parse(raw);
-      if (!d || (!d.marks && !d.participants)) return null;
+      if (!d || (!d.marks && !d.participants && !d.filtered)) return null;
       const n = d.marks ? Object.keys(d.marks).length : 0;
       const np = (d.participants||[]).filter(p=>p.name && p.name.trim()).length;
-      if (!n && !np) return null;
+      const nf = d.filtered ? Object.keys(d.filtered).length : 0;
+      if (!n && !np && !nf) return null;
       return d;
     }catch(e){ return null; }
   }
@@ -840,6 +864,16 @@
 
   const listContainer = document.getElementById('event-list-container');
 
+  function buildDetailTags(ev){
+    const dTags=[];
+    dTags.push(`<span class="detail-tag cat">${esc(ev.category)}</span>`);
+    dTags.push(`<span class="detail-tag age">${esc(ev.age)}</span>`);
+    if (ev.subcat) dTags.push(`<span class="detail-tag">${esc(ev.subcat)}</span>`);
+    if (ev.reqExp) dTags.push(`<span class="detail-tag reqexp">נדרש ניסיון בשיטה</span>`);
+    if (ev.seats)  dTags.push(`<span class="detail-tag seats">${esc(ev.seats)}</span>`);
+    return dTags;
+  }
+
   function buildEventCard(ev){
     const card=document.createElement('div');
     card.className='event-card';
@@ -850,12 +884,7 @@
     card.dataset.age=ev.age;
     card.dataset.date=ev.date;
 
-    const dTags=[];
-    dTags.push(`<span class="detail-tag cat">${esc(ev.category)}</span>`);
-    dTags.push(`<span class="detail-tag age">${esc(ev.age)}</span>`);
-    if (ev.subcat) dTags.push(`<span class="detail-tag">${esc(ev.subcat)}</span>`);
-    if (ev.reqExp) dTags.push(`<span class="detail-tag reqexp">נדרש ניסיון בשיטה</span>`);
-    if (ev.seats)  dTags.push(`<span class="detail-tag seats">${esc(ev.seats)}</span>`);
+    const dTags=buildDetailTags(ev);
 
     card.innerHTML = `
       <div class="event-row">
@@ -876,6 +905,7 @@
             </div>
             <button class="reg-btn" aria-pressed="false" type="button">${ICON_TICK}נרשמתי</button>
           </div>
+          <button class="filter-btn" type="button" title="סנן אירוע זה (לא מתכננים להשתתף)">${ICON_EYEOFF}<span>סנן</span></button>
         </div>
         <div class="event-body">
           <div class="event-main">
@@ -992,6 +1022,15 @@
       afterStateChange();
       return;
     }
+    const fb=e.target.closest('.filter-btn');
+    if (fb){
+      const id=fb.closest('.event-card').dataset.id;
+      if (isSelected(id)) return; // safety net: button is hidden in this case anyway
+      state.filtered[id]=true;
+      afterStateChange();
+      toast('האירוע הוסתר מרשימת הסימון. אפשר לשחזר אותו בטאב "אירועים מסוננים".');
+      return;
+    }
     if (e.target.closest('.seal-wrap')) return;
     if (e.target.closest('.side-extra')) return;
     if (e.target.closest('.detail-source')) return;
@@ -1016,6 +1055,7 @@
     applyFilters();
     if (!panelView.hidden) renderView();
     if (!panelParts.hidden && opts.rerenderParts) renderParts();
+    if (!panelFiltered.hidden) renderFiltered();
     if (opts.markDirty!==false){ setDirty(true); autosave(); }
   }
 
@@ -1023,6 +1063,7 @@
     const n=selectedIds().length;
     document.getElementById('sel-count').textContent=n;
     document.getElementById('part-count').textContent=activeParts().length;
+    document.getElementById('filtered-count').textContent=filteredCount();
     document.getElementById('clear-all').hidden = n===0;
     DAYS.forEach(d=>{
       const c=selectedEvents().filter(e=>e.date===d).length;
@@ -1067,6 +1108,7 @@
     let visible=0;
     cardById.forEach((card,id)=>{
       let show=true;
+      if (isFiltered(id)) show=false;
       if (activeDate!=='all' && card.dataset.date!==activeDate) show=false;
       if (cat!=='all' && card.dataset.cat!==cat) show=false;
       if (age!=='all' && card.dataset.age!==age) show=false;
@@ -1084,9 +1126,11 @@
     document.getElementById('no-results-note').hidden = visible!==0;
     const active = q||activeDate!=='all'||cat!=='all'||age!=='all'||onlySelected||noConflicts;
     resetBtn.hidden=!active;
-    resultCount.innerHTML = active
-      ? `מוצגים <b>${visible}</b> מתוך <b>${EVENTS.length}</b> אירועים`
-      : `<b>${EVENTS.length}</b> אירועים בתוכנייה`;
+    const fN=filteredCount(), totalCount=EVENTS.length-fN;
+    const filteredNote = fN ? ` <span class="filtered-note">(${fN} מסוננים, לא מוצגים כאן)</span>` : '';
+    resultCount.innerHTML = (active
+      ? `מוצגים <b>${visible}</b> מתוך <b>${totalCount}</b> אירועים`
+      : `<b>${totalCount}</b> אירועים בתוכנייה`) + filteredNote;
   }
 
   document.getElementById('clear-all').addEventListener('click',()=>{
@@ -1098,18 +1142,21 @@
   });
 
   /* ============ TABS ============ */
-  const tabMark=document.getElementById('tab-mark'), tabView=document.getElementById('tab-view'), tabParts=document.getElementById('tab-parts');
-  const panelMark=document.getElementById('panel-mark'), panelView=document.getElementById('panel-view'), panelParts=document.getElementById('panel-parts');
+  const tabMark=document.getElementById('tab-mark'), tabView=document.getElementById('tab-view'), tabParts=document.getElementById('tab-parts'), tabFiltered=document.getElementById('tab-filtered');
+  const panelMark=document.getElementById('panel-mark'), panelView=document.getElementById('panel-view'), panelParts=document.getElementById('panel-parts'), panelFiltered=document.getElementById('panel-filtered');
   tabMark.addEventListener('click',()=>switchTab('mark'));
   tabView.addEventListener('click',()=>switchTab('view'));
   tabParts.addEventListener('click',()=>switchTab('parts'));
+  tabFiltered.addEventListener('click',()=>switchTab('filtered'));
   function switchTab(w){
     tabMark.setAttribute('aria-selected',String(w==='mark'));
     tabView.setAttribute('aria-selected',String(w==='view'));
     tabParts.setAttribute('aria-selected',String(w==='parts'));
-    panelMark.hidden=w!=='mark'; panelView.hidden=w!=='view'; panelParts.hidden=w!=='parts';
+    tabFiltered.setAttribute('aria-selected',String(w==='filtered'));
+    panelMark.hidden=w!=='mark'; panelView.hidden=w!=='view'; panelParts.hidden=w!=='parts'; panelFiltered.hidden=w!=='filtered';
     if(w==='view') renderView();
     if(w==='parts') renderParts();
+    if(w==='filtered') renderFiltered();
   }
   window.__switchTab = switchTab;
 
@@ -1313,6 +1360,94 @@
     renderParts();
   });
 
+  /* ============ FILTERED-EVENTS TAB ============ */
+  const filteredContainer = document.getElementById('filtered-list-container');
+  let expandedFiltered = null;
+
+  function buildFilteredCard(ev){
+    const card=document.createElement('div');
+    card.className='event-card';
+    card.dataset.id=ev.id;
+    const dTags=buildDetailTags(ev);
+    card.innerHTML = `
+      <div class="event-row">
+        <div class="event-side">
+          <span class="seal-wrap">
+            <span class="seal">
+              <input type="checkbox" data-id="${ev.id}" aria-label="בטל סינון עבור ${esc(ev.name)}">
+              ${ICON_UNDO}
+            </span>
+          </span>
+          <span class="side-date">${esc(ev.date)}</span>
+          <span class="side-time">${ev.start}<span class="dash">–</span>${ev.end}</span>
+        </div>
+        <div class="event-body">
+          <div class="event-main">
+            <div class="event-name">${esc(ev.name)}</div>
+            <div class="event-tags-row">
+              <span class="pill cat-tag">${esc(ev.category)}</span>
+              ${ev.subcat ? `<span class="pill subcat-tag">${esc(ev.subcat)}</span>` : ''}
+              <span class="pill age-tag">${esc(ev.age)}</span>
+              ${ev.reqExp ? '<span class="pill reqexp">נדרש ניסיון בשיטה</span>' : ''}
+            </div>
+            <div class="event-sub">מנחה: <b>${esc(ev.host)}</b></div>
+          </div>
+          <span class="expand-hint"><span>פרטים</span>${ICON_CHEV}</span>
+        </div>
+      </div>
+      <div class="event-detail"><div class="event-detail-inner"><div class="event-detail-pad">
+        <div class="detail-row">${dTags.join('')}</div>
+        <div class="detail-desc">${esc(ev.desc||'')}</div>
+        <a class="detail-source" href="${ev.url}" target="_blank" rel="noopener">${ICON_LINK}לתיאור המלא והמדויק ולהרשמה בעמוד האירוע</a>
+      </div></div></div>`;
+    return card;
+  }
+
+  function renderFiltered(){
+    const ids=Object.keys(state.filtered);
+    if (!ids.length){
+      filteredContainer.innerHTML = '<div class="empty-note"><strong>אין אירועים מסוננים</strong>אירועים שתסמנו לסינון בטאב "סימון אירועים" יופיעו כאן. אפשר לבטל את הסינון בכל רגע, וכל אירוע כזה יחזור להופיע ברשימת הסימון.</div>';
+      return;
+    }
+    filteredContainer.innerHTML='';
+    const evs=ids.map(id=>EVENTS_BY_ID.get(id)).filter(Boolean).sort((a,b)=>
+      DAYS.indexOf(a.date)-DAYS.indexOf(b.date)||toMin(a.start)-toMin(b.start)||toMin(a.end)-toMin(b.end));
+    let cur=null, listEl=null;
+    evs.forEach(ev=>{
+      if (ev.date!==cur){
+        cur=ev.date;
+        const h=document.createElement('div');
+        h.className='date-heading';
+        h.innerHTML=`<span class="banner"><span class="dot"></span>${DATE_LABEL[ev.date]}</span><span class="rule"></span>`;
+        filteredContainer.appendChild(h);
+        listEl=document.createElement('div'); listEl.className='event-list';
+        filteredContainer.appendChild(listEl);
+      }
+      listEl.appendChild(buildFilteredCard(ev));
+    });
+  }
+
+  filteredContainer.addEventListener('change', e=>{
+    if (!e.target.matches('input[type=checkbox]')) return;
+    const id=e.target.dataset.id;
+    delete state.filtered[id];
+    afterStateChange();
+    toast('האירוע הוחזר לרשימת הסימון.');
+  });
+  filteredContainer.addEventListener('click', e=>{
+    if (e.target.closest('.seal-wrap')) return;
+    if (e.target.closest('.detail-source')) return;
+    const row=e.target.closest('.event-row'), det=e.target.closest('.event-detail');
+    if (!row && !det) return;
+    const card=(row||det).closest('.event-card');
+    if (!card) return;
+    if (det && !card.classList.contains('is-expanded')) return;
+    if (expandedFiltered && expandedFiltered!==card) expandedFiltered.classList.remove('is-expanded');
+    const now=!card.classList.contains('is-expanded');
+    card.classList.toggle('is-expanded', now);
+    expandedFiltered = now?card:null;
+  });
+
   /* ============ TOASTS ============ */
   const toastWrap=document.getElementById('toast-wrap');
   function toast(msg,isErr){
@@ -1332,7 +1467,7 @@
     const L=[];
     L.push('# דרקוניקון 2026 - תוכנייה נבחרת');
     L.push('# נשמר בתאריך: '+new Date().toLocaleString('he-IL'));
-    L.push('# גרסת מבנה: 2');
+    L.push('# גרסת מבנה: 3');
     L.push('#');
     L.push('# ===== משתתפים =====');
     L.push('# פורמט: @מזהה | שם | גיל');
@@ -1357,11 +1492,18 @@
         L.push(`${ev.id} | ${ev.date} | ${ev.start}-${ev.end} | ${prio} | ${reg} | ${pl} | ${ev.name} | ${ev.host}`);
       });
     }
+    L.push('#');
+    L.push('# ===== מסוננים (אירועים שהוסתרו מרשימת הסימון) =====');
+    L.push('# פורמט: !מזהה | שם האירוע (לנוחות קריאה בלבד)');
+    const filt=Object.keys(state.filtered).map(id=>EVENTS_BY_ID.get(id)).filter(Boolean).sort((a,b)=>
+      DAYS.indexOf(a.date)-DAYS.indexOf(b.date)||toMin(a.start)-toMin(b.start));
+    if(!filt.length) L.push('# (אין אירועים מסוננים)');
+    else filt.forEach(ev=>L.push(`!${ev.id} | ${ev.name}`));
     return L.join('\n')+'\n';
   }
 
   function parseFileText(text){
-    const parts=[], marks={};
+    const parts=[], marks={}, filtered={};
     const prioFromLabel = lbl => {
       for (const k in PRIO_LABEL) if (PRIO_LABEL[k]===lbl) return k;
       return null;
@@ -1377,6 +1519,11 @@
         parts.push({id, name:f[1]||'', age:isNaN(age)?'':age, color:PART_COLORS[(parts.length)%PART_COLORS.length]});
         return;
       }
+      if(t.startsWith('!')){
+        const id=t.slice(1).split('|')[0].trim();
+        if(id && EVENTS_BY_ID.has(id)) filtered[id]=true;
+        return;
+      }
       const f=t.split('|').map(s=>s.trim());
       const id=f[0];
       if(!id||!EVENTS_BY_ID.has(id)) return;
@@ -1385,7 +1532,9 @@
       const pl=(f[5]&&f[5]!=='-')?f[5].split(',').map(x=>Number(x.trim())).filter(x=>!isNaN(x)):[];
       marks[id]={prio, reg, parts:pl};
     });
-    return {parts, marks};
+    // an event that's actively selected can never also be filtered — selection wins
+    Object.keys(marks).forEach(id=>{ delete filtered[id]; });
+    return {parts, marks, filtered};
   }
 
   function applyLoaded(data, sourceLabel){
@@ -1399,11 +1548,15 @@
       const m=data.marks[id];
       state.marks[id]={prio:m.prio, reg:m.reg, parts:m.parts.filter(x=>valid.has(x))};
     });
+    state.filtered={};
+    Object.keys(data.filtered||{}).forEach(id=>{
+      if (!isSelected(id)) state.filtered[id]=true;
+    });
     afterStateChange({rerenderParts:true, markDirty:false});
     setDirty(false);
     if(!panelParts.hidden) renderParts();
-    const n=Object.keys(state.marks).length, np=activeParts().length;
-    toast(`נטענו ${n} אירועים ו-${np} משתתפים${sourceLabel?' '+sourceLabel:''}.`);
+    const n=Object.keys(state.marks).length, np=activeParts().length, nf=filteredCount();
+    toast(`נטענו ${n} אירועים, ${np} משתתפים${nf?` ו-${nf} מסוננים`:''}${sourceLabel?' '+sourceLabel:''}.`);
   }
 
   function fallbackDownload(text){
@@ -1628,8 +1781,9 @@
     const when=b.savedAt?new Date(b.savedAt):null;
     const nEv=b.marks?Object.keys(b.marks).length:0;
     const nP=(b.participants||[]).filter(p=>p.name&&p.name.trim()).length;
+    const nF=b.filtered?Object.keys(b.filtered).length:0;
     document.getElementById('restore-text').innerHTML =
-      `<b>נמצא גיבוי אוטומטי</b> מ-${when?when.toLocaleString('he-IL'):'תאריך לא ידוע'} — ${nEv} אירועים ו-${nP} משתתפים. לשחזר?`;
+      `<b>נמצא גיבוי אוטומטי</b> מ-${when?when.toLocaleString('he-IL'):'תאריך לא ידוע'} — ${nEv} אירועים ו-${nP} משתתפים${nF?`, ${nF} מסוננים`:''}. לשחזר?`;
     const banner=document.getElementById('restore-banner');
     banner.classList.add('show');
     document.getElementById('restore-yes').addEventListener('click',()=>{
@@ -1644,6 +1798,10 @@
         if(!EVENTS_BY_ID.has(id)) return;
         const m=b.marks[id];
         state.marks[id]={prio:m.prio||null, reg:!!m.reg, parts:(m.parts||[]).filter(x=>valid.has(x))};
+      });
+      state.filtered={};
+      Object.keys(b.filtered||{}).forEach(id=>{
+        if (EVENTS_BY_ID.has(id) && !isSelected(id)) state.filtered[id]=true;
       });
       banner.classList.remove('show');
       afterStateChange({rerenderParts:true, markDirty:false});
