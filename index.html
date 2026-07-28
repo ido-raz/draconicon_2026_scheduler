@@ -99,6 +99,19 @@
     background:var(--toolbar-bg); position:sticky; top:0; z-index:60;
     box-shadow:0 4px 18px rgba(0,0,0,.28);
   }
+  .collapse-btn{
+    display:flex; align-items:center; gap:6px; flex:0 0 auto;
+    background:var(--toolbar-surface); border:1px solid var(--toolbar-line); border-radius:999px;
+    padding:7px 14px; color:var(--toolbar-text-soft); font-family:'Assistant',sans-serif; font-size:.8rem; font-weight:700;
+    cursor:pointer; transition:background .15s, color .15s, border-color .15s;
+  }
+  .collapse-btn:hover{ background:var(--toolbar-surface-2); color:var(--toolbar-text); border-color:var(--brand-bright); }
+  .collapse-btn svg{ width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2.4; transition:transform .22s ease; }
+  .toolbar.is-collapsed{
+    width:fit-content; margin-inline-start:auto; padding:8px 12px; border-radius:0 0 0 14px;
+  }
+  .toolbar.is-collapsed .tabs, .toolbar.is-collapsed .file-actions{ display:none; }
+  .toolbar.is-collapsed .collapse-btn svg{ transform:rotate(180deg); }
   .tabs{ display:flex; gap:5px; background:var(--toolbar-surface); padding:4px; border-radius:11px; border:1px solid var(--toolbar-line); flex-wrap:wrap; }
   .tab-btn{
     font-family:'Rubik',sans-serif; font-weight:600; font-size:.9rem;
@@ -654,6 +667,10 @@
       <span class="tip">טען מגוגל דרייב</span>
     </button>
   </div>
+  <button class="collapse-btn" id="btn-collapse-toolbar" type="button" aria-expanded="true">
+    <svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>
+    <span id="collapse-btn-label">צמצם</span>
+  </button>
 </div>
 
 <div class="drive-modal-backdrop" id="drive-modal-backdrop">
@@ -1903,6 +1920,19 @@
       applyLoaded(parseFileText(text), 'מגוגל דרייב');
     }catch(err){ driveErrorToast(err); }
   });
+
+  /* ============ TOOLBAR COLLAPSE / EXPAND ============ */
+  (function initToolbarCollapse(){
+    const toolbarEl = document.querySelector('.toolbar');
+    const btn = document.getElementById('btn-collapse-toolbar');
+    const label = document.getElementById('collapse-btn-label');
+    btn.addEventListener('click', () => {
+      const collapsed = toolbarEl.classList.toggle('is-collapsed');
+      btn.setAttribute('aria-expanded', String(!collapsed));
+      label.textContent = collapsed ? 'הרחב' : 'צמצם';
+      btn.setAttribute('aria-label', collapsed ? 'הרחב את הסרגל' : 'צמצם את הסרגל');
+    });
+  })();
 
   /* ============ RESTORE BANNER ============ */
   (function initRestore(){
