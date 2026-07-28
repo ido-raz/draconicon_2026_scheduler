@@ -1112,6 +1112,33 @@
     applyFilters();
   });
 
+  function getFilterState(){
+    return {
+      search: searchInput.value,
+      date: activeDate,
+      cat: catSelect.value,
+      age: ageSelect.value,
+      onlySelected: onlySelected,
+      noConflicts: noConflicts
+    };
+  }
+
+  function applyFilterState(f){
+    if (!f) return;
+    searchInput.value = f.search || '';
+    activeDate = (f.date==='23 אוגוסט' || f.date==='24 אוגוסט') ? f.date : 'all';
+    datePills.forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.date===activeDate)));
+    const catOk = [...catSelect.options].some(o=>o.value===f.cat);
+    catSelect.value = catOk ? f.cat : 'all';
+    const ageOk = [...ageSelect.options].some(o=>o.value===f.age);
+    ageSelect.value = ageOk ? f.age : 'all';
+    onlySelected = !!f.onlySelected;
+    onlySelBtn.setAttribute('aria-pressed', String(onlySelected));
+    noConflicts = !!f.noConflicts;
+    noConfBtn.setAttribute('aria-pressed', String(noConflicts));
+    applyFilters();
+  }
+
   function applyFilters(){
     const q=searchInput.value.trim().toLowerCase();
     const cat=catSelect.value, age=ageSelect.value;
@@ -1654,15 +1681,31 @@
       DAYS.indexOf(a.date)-DAYS.indexOf(b.date)||toMin(a.start)-toMin(b.start));
     if(!filt.length) L.push('# (אין אירועים מסוננים)');
     else filt.forEach(ev=>L.push(`!${ev.id} | ${ev.name}`));
+    L.push('#');
+    L.push('# ===== סינון (מצב הסינון בטאב "סימון אירועים") =====');
+    L.push('# פורמט: %מפתח=ערך');
+    const fst=getFilterState();
+    L.push(`%search=${fst.search}`);
+    L.push(`%date=${fst.date}`);
+    L.push(`%cat=${fst.cat}`);
+    L.push(`%age=${fst.age}`);
+    L.push(`%onlySelected=${fst.onlySelected?'1':'0'}`);
+    L.push(`%noConflicts=${fst.noConflicts?'1':'0'}`);
     return L.join('\n')+'\n';
   }
 
   function parseFileText(text){
-    const parts=[], marks={}, filtered={};
+    const parts=[], marks={}, filtered={}, filterRaw={};
     const oldPrioFromLabel = lbl => (lbl==='חובה'?'must':lbl==='אולי'?'maybe':lbl==='גיבוי'?'backup':null);
     text.split('\n').forEach(line=>{
       const t=line.trim();
       if(!t||t.startsWith('#')) return;
+      if(t.startsWith('%')){
+        const eq=t.indexOf('=');
+        if(eq===-1) return;
+        filterRaw[t.slice(1,eq).trim()] = t.slice(eq+1);
+        return;
+      }
       if(t.startsWith('@')){
         const f=t.slice(1).split('|').map(s=>s.trim());
         const id=Number(f[0]);
@@ -1704,7 +1747,15 @@
     });
     // an event that's actively selected can never also be filtered — selection wins
     Object.keys(marks).forEach(id=>{ delete filtered[id]; });
-    return {parts, marks, filtered};
+    const filters = {
+      search: filterRaw.search || '',
+      date: filterRaw.date || 'all',
+      cat: filterRaw.cat || 'all',
+      age: filterRaw.age || 'all',
+      onlySelected: filterRaw.onlySelected==='1',
+      noConflicts: filterRaw.noConflicts==='1'
+    };
+    return {parts, marks, filtered, filters};
   }
 
   function applyLoaded(data, sourceLabel){
@@ -1728,6 +1779,7 @@
       if (!isSelected(id)) state.filtered[id]=true;
     });
     afterStateChange({rerenderParts:true, markDirty:false});
+    applyFilterState(data.filters);
     setDirty(false);
     if(!panelParts.hidden) renderParts();
     const n=Object.keys(state.marks).length, np=activeParts().length, nf=filteredCount();
