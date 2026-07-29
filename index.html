@@ -819,7 +819,10 @@
     conflictMap = new Map();
     activeParts().forEach(p => {
       const evs = selectedIds()
-        .filter(id => Object.prototype.hasOwnProperty.call(state.marks[id].parts, p.id))
+        .filter(id => {
+          const status = state.marks[id].parts[p.id];
+          return status === 'reg' || status === 'must';
+        })
         .map(id => EVENTS_BY_ID.get(id))
         .filter(Boolean);
       for (let i=0;i<evs.length;i++){
