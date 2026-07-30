@@ -709,8 +709,8 @@
       </div>
       <div class="pill-group" id="time-pills">
         <button class="pill-toggle" aria-pressed="true" data-time="all" type="button">כל השעות</button>
-        <button class="pill-toggle" aria-pressed="false" data-time="morning" type="button" title="שעת התחלה עד 12:00 (לא כולל)">בוקר</button>
-        <button class="pill-toggle" aria-pressed="false" data-time="afternoon" type="button" title="שעת התחלה מ-12:00 (כולל) עד 18:00 (לא כולל)">צהריים</button>
+        <button class="pill-toggle" aria-pressed="false" data-time="morning" type="button" title="שעת התחלה עד 13:30 (לא כולל)">בוקר</button>
+        <button class="pill-toggle" aria-pressed="false" data-time="afternoon" type="button" title="שעת התחלה מ-13:30 (כולל) עד 18:00 (לא כולל)">צהריים</button>
         <button class="pill-toggle" aria-pressed="false" data-time="evening" type="button" title="שעת התחלה מ-18:00 (כולל) והלאה">ערב</button>
       </div>
       <select class="mini-select" id="cat-select" aria-label="סינון לפי קטגוריה"><option value="all">כל הקטגוריות</option></select>
@@ -1105,7 +1105,7 @@
   let activeDate='all', activeTime='all', onlySelected=false, noConflicts=false;
 
   function timeBucket(start){
-    if (start < '12:00') return 'morning';
+    if (start < '13:30') return 'morning';
     if (start < '18:00') return 'afternoon';
     return 'evening';
   }
@@ -1257,8 +1257,8 @@
 
   /* ============ TAB 2 ============ */
   const ROW_DEFS=[
-    {label:'בוקר (עד 12:00)',      test:t=>t<'12:00'},
-    {label:'צהריים (12:00-18:00)', test:t=>t>='12:00'&&t<'18:00'},
+    {label:'בוקר (עד 13:30)',      test:t=>t<'13:30'},
+    {label:'צהריים (13:30-18:00)', test:t=>t>='13:30'&&t<'18:00'},
     {label:'ערב (18:00 והלאה)',    test:t=>t>='18:00'}
   ];
 
@@ -1364,14 +1364,14 @@
           ${nReg?`<span class="stat-chip"><span class="num">${nReg}</span> רשום</span>`:''}
           ${nConfEvents?`<span class="stat-chip warn"><span class="num">${nConfEvents}</span> בחפיפה</span>`:''}
         </div>
-        <button class="btn-print" id="btn-print" type="button">
+        <button class="btn-print" type="button">
           <svg viewBox="0 0 24 24"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2"/><path d="M6 14h12v7H6z"/></svg>הדפסה
         </button>
       </div>` + legend + banner
       + buildDayTable(DAYS[0], sel.filter(e=>e.date===DAYS[0]))
       + buildDayTable(DAYS[1], sel.filter(e=>e.date===DAYS[1]));
 
-    const pb=document.getElementById('btn-print');
+    const pb=panelView.querySelector('.btn-print');
     if (pb) pb.addEventListener('click',()=>window.print());
     const goto=panelView.querySelector('[data-goto-parts]');
     if (goto) goto.addEventListener('click',()=>switchTab('parts'));
@@ -1475,6 +1475,9 @@
         <span class="stat-chip"><span class="num">${evs.filter(e=>e.date===DAYS[0]).length}</span> ב-23 באוג׳</span>
         <span class="stat-chip"><span class="num">${evs.filter(e=>e.date===DAYS[1]).length}</span> ב-24 באוג׳</span>
       </div>
+      ${evs.length?`<button class="btn-print" type="button">
+        <svg viewBox="0 0 24 24"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2"/><path d="M6 14h12v7H6z"/></svg>הדפסה
+      </button>`:''}
     </div>`;
 
     if (!evs.length){
@@ -1484,6 +1487,9 @@
     panelParticipant.innerHTML = head
       + buildParticipantDayTable(pid, DAYS[0], evs)
       + buildParticipantDayTable(pid, DAYS[1], evs);
+
+    const pb=panelParticipant.querySelector('.btn-print');
+    if (pb) pb.addEventListener('click',()=>window.print());
   }
 
   /* ============ TAB 3: participants ============ */
