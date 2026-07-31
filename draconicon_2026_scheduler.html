@@ -65,6 +65,7 @@
     --tab-chip-bg:#669bbc;
     --tab-chip-bg-2:#7fb0cf;
     --tab-selected-bg:#780000;
+    --tab-unselected-bg:#a7cee8;
     --toolbar-outer-bg:#003049;
 
     --card-header-bg:#12172b;
@@ -133,7 +134,7 @@
   .tabs{ display:flex; gap:5px; background:var(--tab-chip-bg); padding:4px; border-radius:11px; border:1px solid var(--toolbar-line); flex-wrap:wrap; }
   .tab-btn{
     font-family:'Rubik',sans-serif; font-weight:600; font-size:.9rem;
-    color:#000; background:transparent; border:none;
+    color:#000; background:var(--tab-unselected-bg); border:none;
     padding:9px 16px; border-radius:8px; cursor:pointer;
     display:flex; align-items:center; gap:7px;
     transition:background .18s ease, color .18s ease;
