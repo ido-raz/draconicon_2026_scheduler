@@ -560,6 +560,8 @@
   .mini-card .mc-time{ display:inline-flex; align-items:center; gap:5px; font-weight:600; font-family:'Rubik',sans-serif; font-size:.86rem; color:var(--ink); }
   .mini-card .mc-time svg{ width:12px; height:12px; stroke:var(--ink-soft); fill:none; stroke-width:2; }
   .mini-card .mc-name{ font-family:'Rubik',sans-serif; font-weight:600; color:var(--ink); font-size:.96rem; display:block; margin:6px 0 7px; line-height:1.45; }
+  a.mc-name{ text-decoration:none; cursor:pointer; }
+  a.mc-name:hover{ text-decoration:underline; color:var(--brand); }
   .mini-card .mc-sub{ color:var(--ink-soft); font-size:.72rem; display:block; margin-top:5px; line-height:1.5; }
   .mini-card .mc-cat{ display:inline-block; font-size:.64rem; font-weight:700; color:var(--cat-color); background:var(--cat-tint); padding:3px 10px; border-radius:999px; }
   .mini-card .mc-subcat{ display:inline-block; font-size:.64rem; font-weight:700; color:var(--subcat-color); background:var(--subcat-tint); padding:2px 9px; border-radius:999px; margin-inline-start:4px; }
@@ -1282,7 +1284,8 @@
     {label:'ערב (18:00 והלאה)',    test:t=>t>='18:00'}
   ];
 
-  function miniCardHTML(ev){
+  function miniCardHTML(ev, opts){
+    opts = opts || {};
     const m=markOf(ev.id);
     const cSet=conflictMap.get(ev.id);
     const isC=cSet&&cSet.size>0;
@@ -1312,7 +1315,9 @@
         <span class="mc-time">${ICON_CLOCK}${ev.start}–${ev.end}</span>
         <button class="mc-deselect-btn" type="button" data-ev="${ev.id}" title="בטל את הסימון של האירוע הזה">${ICON_X}<span>בטל בחירה</span></button>
       </div>
-      <span class="mc-name">${esc(ev.name)}</span>
+      ${opts.linkName
+        ? `<a class="mc-name" href="${ev.url}" target="_blank" rel="noopener" title="פתיחת עמוד האירוע באתר המקורי">${esc(ev.name)}</a>`
+        : `<span class="mc-name">${esc(ev.name)}</span>`}
       <span class="mc-cat">${esc(ev.category)}</span>${ev.subcat?`<span class="mc-subcat">${esc(ev.subcat)}</span>`:''}
       ${flags.length?`<div class="mc-flags">${flags.join('')}</div>`:''}
       <span class="mc-sub">מנחה: ${esc(ev.host)}</span>
@@ -1468,7 +1473,7 @@
       const cellEvs = dayEvs.filter(e=>rd.test(e.start)).sort((a,b)=>
         (PSTATUS_RANK[markOf(a.id).parts[pid]]??5)-(PSTATUS_RANK[markOf(b.id).parts[pid]]??5) || toMin(a.start)-toMin(b.start) || a.name.localeCompare(b.name,'he'));
       const cell = cellEvs.length
-        ? `<td class="slot-cell has-items"><div class="participant-row">${cellEvs.map(miniCardHTML).join('')}</div></td>`
+        ? `<td class="slot-cell has-items"><div class="participant-row">${cellEvs.map(ev=>miniCardHTML(ev, {linkName:true})).join('')}</div></td>`
         : `<td class="slot-cell"><div class="cell-empty">—</div></td>`;
       return `<tr><th class="row-label">${rd.label}</th>${cell}</tr>`;
     }).join('');
